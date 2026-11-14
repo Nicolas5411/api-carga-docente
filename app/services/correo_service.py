@@ -1,12 +1,12 @@
 
 import os
 import re
-import smtplib
+import json
+import base64
+import urllib.request
+import urllib.error
 
-from io import BytesIO
-from email.message import EmailMessage
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
@@ -23,82 +23,115 @@ class CorreoService:
         mime_type
     ):
 
-        # Configuración SMTP
-        smtp_host = os.getenv("SMTP_HOST")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_user = os.getenv("SMTP_USER")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-        correo_remitente = os.getenv("SMTP_FROM") or smtp_user
-        usar_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+        # Configuración de Brevo
+        api_key = os.getenv("BREVO_API_KEY")
+        correo_remitente = os.getenv("BREVO_SENDER_EMAIL")
+        nombre_remitente = os.getenv(
+            "BREVO_SENDER_NAME",
+            "Carga Docente CUL"
+        )
 
         # Verificar configuración
         if not all([
-            smtp_host,
-            smtp_user,
-            smtp_password,
-            correo_remitente
+            api_key,
+            correo_remitente,
+            nombre_remitente
         ]):
             raise RuntimeError(
-                "Falta configurar las variables SMTP en el archivo .env"
+                "El servicio de correo no está configurado correctamente. "
+                "Verifica BREVO_API_KEY, BREVO_SENDER_EMAIL "
+                "y BREVO_SENDER_NAME."
             )
 
         # Validar correo del destinatario
         patron_correo = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
         if not re.fullmatch(patron_correo, destinatario or ""):
-            raise ValueError("El correo destinatario no es válido")
+            raise ValueError(
+                "El correo destinatario no es válido"
+            )
 
-        # Preparar mensaje
-        correo = EmailMessage()
+        # Validar tipo de archivo
+        if not mime_type or "/" not in mime_type:
+            raise ValueError(
+                "El tipo de archivo no es válido"
+            )
 
-        correo["Subject"] = asunto
-        correo["From"] = correo_remitente
-        correo["To"] = destinatario
-
-        correo.set_content(mensaje)
-
-        # Preparar archivo adjunto
+        # Convertir archivo a Base64
         archivo.seek(0)
         contenido = archivo.read()
 
-        if "/" not in mime_type:
-            raise ValueError("El tipo de archivo no es válido")
+        archivo_base64 = base64.b64encode(
+            contenido
+        ).decode("utf-8")
 
-        tipo_principal, tipo_secundario = mime_type.split("/", 1)
+        # Preparar solicitud para Brevo
+        datos = {
+            "sender": {
+                "name": nombre_remitente,
+                "email": correo_remitente
+            },
+            "to": [
+                {
+                    "email": destinatario
+                }
+            ],
+            "subject": asunto,
+            "textContent": mensaje,
+            "attachment": [
+                {
+                    "name": nombre_archivo,
+                    "content": archivo_base64
+                }
+            ]
+        }
 
-        correo.add_attachment(
-            contenido,
-            maintype=tipo_principal,
-            subtype=tipo_secundario,
-            filename=nombre_archivo
+        cuerpo = json.dumps(datos).encode("utf-8")
+
+        solicitud = urllib.request.Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=cuerpo,
+            headers={
+                "api-key": api_key,
+                "accept": "application/json",
+                "content-type": "application/json"
+            },
+            method="POST"
         )
 
-        # Enviar correo
-        if usar_ssl:
-            with smtplib.SMTP_SSL(
-                smtp_host,
-                smtp_port,
+        # Enviar correo mediante Brevo
+        try:
+            with urllib.request.urlopen(
+                solicitud,
                 timeout=30
-            ) as servidor:
+            ) as respuesta:
 
-                servidor.login(smtp_user, smtp_password)
-                servidor.send_message(correo)
+                resultado = json.loads(
+                    respuesta.read().decode("utf-8")
+                )
 
-        else:
-            with smtplib.SMTP(
-                smtp_host,
-                smtp_port,
-                timeout=30
-            ) as servidor:
+                return {
+                    "success": True,
+                    "message": "Correo enviado correctamente",
+                    "message_id": resultado.get("messageId")
+                }
 
-                servidor.ehlo()
-                servidor.starttls()
-                servidor.ehlo()
+        except urllib.error.HTTPError as error:
 
-                servidor.login(smtp_user, smtp_password)
-                servidor.send_message(correo)
+            detalle = error.read().decode(
+                "utf-8",
+                errors="replace"
+            )
 
-        return True
+            raise RuntimeError(
+                f"Brevo rechazó el envío: {detalle}"
+            )
+
+        except urllib.error.URLError as error:
+
+            raise RuntimeError(
+                f"No fue posible conectar con Brevo: {error.reason}"
+            )
 
 
 correo_service = CorreoService()
