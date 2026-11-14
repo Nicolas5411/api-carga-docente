@@ -48,22 +48,15 @@ extra_origins = [
     if origin.strip()
 ]
 
-origins = list(
-    dict.fromkeys(ALLOWED_ORIGINS_DEFAULT + extra_origins)
-)
+origins = list(dict.fromkeys(
+    ALLOWED_ORIGINS_DEFAULT + extra_origins
+))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=[
-        "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "PATCH",
-        "OPTIONS",
-    ],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -83,8 +76,6 @@ app.include_router(evaluaciones.router)
 app.include_router(preguntas.router)
 app.include_router(preguntas_evaluacion.router)
 app.include_router(respuestas.router)
-
-# Reportes
 app.include_router(reportes.router)
 
 
