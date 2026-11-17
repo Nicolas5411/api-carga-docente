@@ -31,13 +31,18 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
-
 ALLOWED_ORIGINS_DEFAULT = [
+    # Desarrollo local
     "http://localhost:5173",
     "http://localhost:4173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
+
+    # Aplicación web publicada
     "https://cargadocente.netlify.app",
+
+    # Aplicación móvil Capacitor Android
+    "https://localhost",
 ]
 
 origins_env = os.getenv("ALLOWED_ORIGINS", "")
