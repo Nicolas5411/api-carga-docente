@@ -38,8 +38,9 @@ ALLOWED_ORIGINS_DEFAULT = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
 
-    # Aplicación web publicada
+    # Aplicación web publicada en Netlify
     "https://cargadocente.netlify.app",
+    "https://fastidious-kataifi-8f9bad.netlify.app",
 
     # Aplicación móvil Capacitor Android
     "https://localhost",
