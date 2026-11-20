@@ -1,8 +1,9 @@
-
 import os
+import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import (
     roles,
@@ -23,6 +24,8 @@ from app.api import (
     reportes,
 )
 
+logger = logging.getLogger("uvicorn.error")
+
 app = FastAPI(
     title="API Carga docente",
     description=(
@@ -31,6 +34,7 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
+
 ALLOWED_ORIGINS_DEFAULT = [
     # Desarrollo local
     "http://localhost:5173",
@@ -45,8 +49,11 @@ ALLOWED_ORIGINS_DEFAULT = [
     "https://rococo-croquembouche-ac8bae.netlify.app",
     "https://carga-academica-movil-bikm.netlify.app",
 
-    # Aplicación móvil Capacitor Android
+    # Aplicación móvil Capacitor (Android / iOS)
     "https://localhost",
+    "http://localhost",
+    "capacitor://localhost",
+    "ionic://localhost",
 ]
 
 origins_env = os.getenv("ALLOWED_ORIGINS", "")
@@ -57,13 +64,30 @@ extra_origins = [
     if origin.strip()
 ]
 
-origins = list(dict.fromkeys(
-    ALLOWED_ORIGINS_DEFAULT + extra_origins
-))
+origins = list(dict.fromkeys(ALLOWED_ORIGINS_DEFAULT + extra_origins))
 
+
+# Middleware que atrapa errores no controlados. Se registra ANTES de CORS
+# para quedar "por dentro": así la respuesta 500 pasa por CORSMiddleware
+# y conserva los headers Access-Control-Allow-*.
+@app.middleware("http")
+async def capturar_errores(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Error interno del servidor", "error": str(exc)},
+        )
+
+
+# CORS debe agregarse DESPUÉS (queda como capa más externa)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    # Cualquier subdominio de Netlify (incluye deploy previews)
+    allow_origin_regex=r"https://.*\.netlify\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
