@@ -43,6 +43,7 @@ ALLOWED_ORIGINS_DEFAULT = [
     "https://fastidious-kataifi-8f9bad.netlify.app",
     "https://effulgent-pixie-c5a88d.netlify.app",
     "https://rococo-croquembouche-ac8bae.netlify.app",
+    "https://carga-academica-movil-bikm.netlify.app",
 
     # Aplicación móvil Capacitor Android
     "https://localhost",
